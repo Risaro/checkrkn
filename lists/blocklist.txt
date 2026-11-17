@@ -1,4 +1,4 @@
-# checkrkn blocklist, built 2026-11-17T15:35:06+00:00
+# checkrkn blocklist, built 2026-11-17T15:40:25+00:00
 # v4=22559 v6=301
 1.1.220.166/32
 1.2.252.192/32
