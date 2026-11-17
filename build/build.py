@@ -22,6 +22,10 @@ SAFE = [
     ("dshield_top", "https://feeds.dshield.org/block.txt", "dshield"),
     ("et_block", "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt", "text"),
     ("feodo_c2", "https://feodotracker.abuse.ch/downloads/ipblocklist.txt", "text"),
+    ("shadow_antiscanner", "https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/antiscanner.list", "text"),
+]
+FULL_ONLY = [
+    ("shadow_gov", "https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/government_networks.list", "text"),
 ]
 AGGRESSIVE = [
     ("ipsum_l3", "https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt", "text"),
@@ -199,6 +203,13 @@ def main():
         safe.extend(good)
         stats["sources"][name] = {"role": "safe", "count": len(good), "state": state}
 
+    full_only = []
+    for name, url, kind in FULL_ONLY:
+        nets, state = load_source(name, url, kind)
+        good = [n for n in nets if not bad_scope(n) and not wide(n, name)]
+        full_only.extend(good)
+        stats["sources"][name] = {"role": "full_only", "count": len(good), "state": state}
+
     spare, spare_state = ripe_country_nets(SPARE_COUNTRIES)
     stats["sources"]["ripe_spare"] = {"role": "spare_countries", "countries": sorted(SPARE_COUNTRIES),
                                       "count": len(spare or []), "state": spare_state}
@@ -213,7 +224,7 @@ def main():
         aggressive.extend(kept)
         stats["sources"][name] = {"role": "aggressive", "count": len(kept), "dropped_spared": len(good) - len(kept), "state": state}
 
-    allnets = subtract(safe + aggressive, never)
+    allnets = subtract(safe + full_only + aggressive, never)
     v4 = list(ipaddress.collapse_addresses([n for n in allnets if n.version == 4]))
     v6 = list(ipaddress.collapse_addresses([n for n in allnets if n.version == 6]))
     if len(v4) < 1000:
