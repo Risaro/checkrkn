@@ -1,0 +1,79 @@
+{
+  "built_at": "2026-11-17T15:35:06+00:00",
+  "sources": {
+    "cloudflare_v4": {
+      "role": "never_block",
+      "count": 15,
+      "state": "fresh"
+    },
+    "cloudflare_v6": {
+      "role": "never_block",
+      "count": 7,
+      "state": "fresh"
+    },
+    "rkn_scanners": {
+      "role": "safe",
+      "count": 2059,
+      "state": "fresh"
+    },
+    "isc_research": {
+      "role": "safe",
+      "count": 17415,
+      "state": "fresh"
+    },
+    "spamhaus_drop_v4": {
+      "role": "safe",
+      "count": 1739,
+      "state": "fresh"
+    },
+    "spamhaus_drop_v6": {
+      "role": "safe",
+      "count": 90,
+      "state": "fresh"
+    },
+    "dshield_top": {
+      "role": "safe",
+      "count": 20,
+      "state": "fresh"
+    },
+    "et_block": {
+      "role": "safe",
+      "count": 1784,
+      "state": "fresh"
+    },
+    "feodo_c2": {
+      "role": "safe",
+      "count": 5,
+      "state": "fresh"
+    },
+    "ripe_spare": {
+      "role": "spare_countries",
+      "countries": [
+        "RU"
+      ],
+      "count": 13689,
+      "state": "fresh"
+    },
+    "ipsum_l3": {
+      "role": "aggressive",
+      "count": 17319,
+      "dropped_spared": 289,
+      "state": "fresh"
+    },
+    "cins_badguys": {
+      "role": "aggressive",
+      "count": 14925,
+      "dropped_spared": 75,
+      "state": "fresh"
+    },
+    "binarydefense": {
+      "role": "aggressive",
+      "count": 1383,
+      "dropped_spared": 18,
+      "state": "fresh"
+    }
+  },
+  "total_v4": 22559,
+  "total_v6": 301,
+  "total_v4_addresses": 15097519
+}

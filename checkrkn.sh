@@ -5,12 +5,18 @@ NAME=checkrkn
 DIR=/etc/$NAME
 BIN=/usr/local/sbin/$NAME
 TABLE=$NAME
-LIST_URL="${CHECKRKN_URL:-https://gist.githubusercontent.com/Risaro/99e65e4285454bc07a746f5b54e4160f/raw/blacklist.txt}"
+[ -f "$DIR/config" ] && . "$DIR/config"
+LIST_KIND="${CHECKRKN_LIST:-full}"
+[ "$LIST_KIND" = "safe" ] && LIST_FILE=blocklist-safe.txt || LIST_FILE=blocklist.txt
+LIST_URL="${CHECKRKN_URL:-https://raw.githubusercontent.com/Risaro/checkrkn/main/lists/$LIST_FILE}"
 SELF_URL="${CHECKRKN_SELF:-https://raw.githubusercontent.com/Risaro/checkrkn/main/checkrkn.sh}"
-MIN_ENTRIES=100
-MAX_ENTRIES=50000
-MIN_PREFIX4=16
-MIN_PREFIX6=32
+MIN_ENTRIES=1000
+MAX_ENTRIES=300000
+MIN_PREFIX4=12
+MIN_PREFIX6=24
+AUTOBAN="${CHECKRKN_AUTOBAN:-1}"
+BAN_TIME="${CHECKRKN_BAN_TIME:-24h}"
+SCAN_PORTS="${CHECKRKN_SCAN_PORTS:-4}"
 
 G='\033[1;32m'; Y='\033[1;33m'; R='\033[1;31m'; N='\033[0m'
 log()  { echo "$(date '+%F %T') $*"; }
@@ -76,16 +82,45 @@ render() {
         echo "  set allow6 { type ipv6_addr; flags interval; auto-merge; }"
         echo "  set block4 { type ipv4_addr; flags interval; auto-merge; }"
         echo "  set block6 { type ipv6_addr; flags interval; auto-merge; }"
+        echo "  set autoban4 { type ipv4_addr; flags dynamic,timeout; timeout $BAN_TIME; size 262144; }"
+        echo "  set autoban6 { type ipv6_addr; flags dynamic,timeout; timeout $BAN_TIME; size 262144; }"
+        echo "  set seen4 { type ipv4_addr . inet_service; flags dynamic,timeout; timeout 2m; size 524288; }"
+        echo "  set seen6 { type ipv6_addr . inet_service; flags dynamic,timeout; timeout 2m; size 524288; }"
+        echo "  set rate4 { type ipv4_addr; flags dynamic,timeout; timeout 2m; size 262144; }"
+        echo "  set rate6 { type ipv6_addr; flags dynamic,timeout; timeout 2m; size 262144; }"
+        echo "  set openports { type inet_service; flags interval; auto-merge; }"
         echo "  counter dropped4 {}"
         echo "  counter dropped6 {}"
+        echo "  counter autobanned {}"
+        echo "  counter autoban_drops {}"
         echo "  chain pre {"
         echo "    type filter hook prerouting priority raw - 10; policy accept;"
         echo "    ip saddr @allow4 accept"
         echo "    ip6 saddr @allow6 accept"
-        echo "    ip saddr @block4 counter name dropped4 drop"
-        echo "    ip6 saddr @block6 counter name dropped6 drop"
+        echo "    ip saddr @autoban4 tcp flags & (fin | syn | rst | ack) == syn counter name autoban_drops drop"
+        echo "    ip6 saddr @autoban6 tcp flags & (fin | syn | rst | ack) == syn counter name autoban_drops drop"
+        echo "    ip saddr @block4 tcp flags & (fin | syn | rst | ack) == syn counter name dropped4 drop"
+        echo "    ip6 saddr @block6 tcp flags & (fin | syn | rst | ack) == syn counter name dropped6 drop"
+        if [ "$AUTOBAN" = "1" ] && [ "$6" -gt 0 ]; then
+            echo "    tcp flags & (fin | syn | rst | ack) == syn fib daddr type local tcp dport != @openports ip saddr . tcp dport != @seen4 add @seen4 { ip saddr . tcp dport } add @rate4 { ip saddr limit rate over $SCAN_PORTS/minute burst $SCAN_PORTS packets } add @autoban4 { ip saddr } counter name autobanned drop"
+            echo "    tcp flags & (fin | syn | rst | ack) == syn fib daddr type local tcp dport != @openports ip6 saddr . tcp dport != @seen6 add @seen6 { ip6 saddr . tcp dport } add @rate6 { ip6 saddr limit rate over $SCAN_PORTS/minute burst $SCAN_PORTS packets } add @autoban6 { ip6 saddr } counter name autobanned drop"
+        fi
         echo "  }"
+        for hook in input forward; do
+            echo "  chain $hook {"
+            echo "    type filter hook $hook priority filter - 20; policy accept;"
+            echo "    ip saddr @allow4 accept"
+            echo "    ip6 saddr @allow6 accept"
+            echo "    meta l4proto != tcp ip saddr @autoban4 ct state new counter name autoban_drops drop"
+            echo "    meta l4proto != tcp ip6 saddr @autoban6 ct state new counter name autoban_drops drop"
+            echo "    meta l4proto != tcp ip saddr @block4 ct state new counter name dropped4 drop"
+            echo "    meta l4proto != tcp ip6 saddr @block6 ct state new counter name dropped6 drop"
+            echo "  }"
+        done
         echo "}"
+        [ -s "$7" ] && echo "add element inet $TABLE openports { $(paste -sd, "$7") }"
+        [ -s "$8" ] && echo "add element inet $TABLE autoban4 { $(paste -sd, "$8") }"
+        [ -s "$9" ] && echo "add element inet $TABLE autoban6 { $(paste -sd, "$9") }"
         for pair in "allow4:$a4" "allow6:$a6" "block4:$b4" "block6:$b6"; do
             local set="${pair%%:*}" file="${pair#*:}"
             [ -s "$file" ] || continue
@@ -111,10 +146,37 @@ apply_in() {
     if ! ov=$(overlap_check "$tmp/all" "$tmp/allow"); then
         log "[ERROR] список задевает адреса из $DIR/allow.txt, не применён:"; echo "$ov"; return 1
     fi
-    render "$tmp/b4" "$tmp/b6" "$tmp/a4" "$tmp/a6" "$tmp/rules.nft"
+    open_ports > "$tmp/ports"
+    keep_bans autoban4 > "$tmp/ban4"; keep_bans autoban6 > "$tmp/ban6"
+    render "$tmp/b4" "$tmp/b6" "$tmp/a4" "$tmp/a6" "$tmp/rules.nft" "$(wc -l < "$tmp/ports")" "$tmp/ports" "$tmp/ban4" "$tmp/ban6"
     nft -c -f "$tmp/rules.nft" || { log "[ERROR] проверка nft не прошла, не применён"; return 1; }
     nft -f "$tmp/rules.nft" || { log "[ERROR] не удалось применить правила"; return 1; }
     log "[OK] применено: v4=$n4 v6=$n6"
+}
+
+open_ports() {
+    {
+        ss -Hltn 2>/dev/null | awk '{print $4}' | sed 's/.*://'
+        iptables -t nat -S 2>/dev/null | grep -o -- '--dport [0-9:]*' | awk '{print $2}' | tr ':' '-'
+        [ -s "$DIR/ports.txt" ] && grep -oE '^[0-9]+(-[0-9]+)?' "$DIR/ports.txt"
+    } | grep -E '^[0-9]+(-[0-9]+)?$' | sort -u
+}
+
+keep_bans() {
+    nft -j list set inet "$TABLE" "$1" 2>/dev/null | python3 -c '
+import json, sys
+for x in json.load(sys.stdin)["nftables"]:
+    for e in x.get("set", {}).get("elem", []) or []:
+        v = e["elem"]["val"] if isinstance(e, dict) and "elem" in e else e
+        if isinstance(v, str):
+            print(v)' 2>/dev/null
+}
+
+cmd_ports() {
+    nft list table inet "$TABLE" >/dev/null 2>&1 || return 0
+    local p; p=$(open_ports | paste -sd,)
+    [ -n "$p" ] || return 0
+    printf 'flush set inet %s openports\nadd element inet %s openports { %s }\n' "$TABLE" "$TABLE" "$p" | nft -f -
 }
 
 apply_from() {
@@ -149,6 +211,8 @@ cmd_status() {
     if ! nft list table inet "$TABLE" >/dev/null 2>&1; then warn "Не активен."; return 1; fi
     echo "Блок IPv4: $(set_size block4) диапазонов, IPv6: $(set_size block6)"
     echo "Белый список IPv4: $(set_size allow4), IPv6: $(set_size allow6)"
+    echo "Автобан сейчас: IPv4 $(set_size autoban4), IPv6 $(set_size autoban6)"
+    echo "Открытые порты: $(nft list set inet "$TABLE" openports 2>/dev/null | tr -d '\n\t' | grep -o 'elements = {[^}]*' | sed 's/elements = { //' | cut -c1-150)"
     nft list counters table inet "$TABLE" 2>/dev/null | awk '/counter/{n=$2} /packets/{print "Отброшено " n ": " $2 " пакетов, " $4 " байт"}'
     [ -s "$DIR/list.txt" ] && echo "Последний рабочий список: $(stat -c %y "$DIR/list.txt" | cut -d. -f1)"
     systemctl list-timers "$NAME-update.timer" --no-pager 2>/dev/null | sed -n 2p
@@ -168,6 +232,13 @@ cmd_install() {
     need_root; ensure_deps
     mkdir -p "$DIR"; [ -f "$DIR/allow.txt" ] || : > "$DIR/allow.txt"
     install_self
+    {
+        echo "CHECKRKN_LIST=\"$LIST_KIND\""
+        echo "CHECKRKN_AUTOBAN=\"$AUTOBAN\""
+        echo "CHECKRKN_BAN_TIME=\"$BAN_TIME\""
+        echo "CHECKRKN_SCAN_PORTS=\"$SCAN_PORTS\""
+        [ -n "${CHECKRKN_URL:-}" ] && echo "CHECKRKN_URL=\"$CHECKRKN_URL\""
+    } > "$DIR/config"
     cat > /etc/systemd/system/$NAME.service <<EOF
 [Unit]
 Description=$NAME blocklist
@@ -190,28 +261,47 @@ Description=$NAME list update
 Type=oneshot
 ExecStart=$BIN update
 EOF
-    cat > /etc/systemd/system/$NAME-update.timer <<EOF
+    cat > /etc/systemd/system/$NAME-ports.service <<UNIT
 [Unit]
-Description=$NAME daily update
+Description=$NAME refresh open ports
+
+[Service]
+Type=oneshot
+ExecStart=$BIN ports
+UNIT
+    cat > /etc/systemd/system/$NAME-ports.timer <<UNIT
+[Unit]
+Description=$NAME refresh open ports every minute
 
 [Timer]
-OnCalendar=*-*-* 03:20:00
-RandomizedDelaySec=1h
+OnBootSec=1min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+UNIT
+    cat > /etc/systemd/system/$NAME-update.timer <<EOF
+[Unit]
+Description=$NAME list update every 6h
+
+[Timer]
+OnCalendar=*-*-* 00/6:30:00
+RandomizedDelaySec=45m
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
     systemctl daemon-reload
-    systemctl enable -q "$NAME.service" "$NAME-update.timer"
-    systemctl start "$NAME-update.timer"
+    systemctl enable -q "$NAME.service" "$NAME-update.timer" "$NAME-ports.timer"
+    systemctl start "$NAME-update.timer" "$NAME-ports.timer"
     if cmd_update; then ok "$NAME установлен."; cmd_status; else err "Список не применён, смотрите сообщения выше."; exit 1; fi
 }
 
 cmd_uninstall() {
     need_root
-    systemctl disable --now -q "$NAME.service" "$NAME-update.timer" 2>/dev/null
-    rm -f /etc/systemd/system/$NAME.service /etc/systemd/system/$NAME-update.service /etc/systemd/system/$NAME-update.timer "$BIN"
+    systemctl disable --now -q "$NAME.service" "$NAME-update.timer" "$NAME-ports.timer" 2>/dev/null
+    rm -f /etc/systemd/system/$NAME.service /etc/systemd/system/$NAME-update.service /etc/systemd/system/$NAME-update.timer /etc/systemd/system/$NAME-ports.service /etc/systemd/system/$NAME-ports.timer "$BIN"
     systemctl daemon-reload
     nft delete table inet "$TABLE" 2>/dev/null
     ok "$NAME удалён (настройки в $DIR сохранены)."
@@ -222,6 +312,8 @@ case "${1:-install}" in
     update)    need_root; mkdir -p "$DIR"; cmd_update ;;
     boot)      need_root; mkdir -p "$DIR"; cmd_boot ;;
     status)    cmd_status ;;
+    ports)     need_root; cmd_ports ;;
+    unban)     need_root; nft delete element inet "$TABLE" autoban4 "{ ${2:?ip} }" 2>/dev/null || nft delete element inet "$TABLE" autoban6 "{ ${2:?ip} }" ;;
     uninstall) cmd_uninstall ;;
-    *) echo "Использование: $NAME [install|update|status|uninstall]"; exit 1 ;;
+    *) echo "Использование: $NAME [install|update|status|ports|unban IP|uninstall]"; exit 1 ;;
 esac
