@@ -102,6 +102,9 @@ render() {
         echo "  counter autoban_drops {}"
         echo "  chain pre {"
         echo "    type filter hook prerouting priority raw - 10; policy accept;"
+        echo "    iif lo accept"
+        echo "    ip saddr { 127.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } accept"
+        echo "    ip6 saddr { ::1, fc00::/7, fe80::/10 } accept"
         echo "    ip saddr @allow4 accept"
         echo "    ip6 saddr @allow6 accept"
         echo "    ip saddr @autoban4 tcp flags & (fin | syn | rst | ack) == syn counter name autoban_drops drop"
@@ -120,6 +123,9 @@ render() {
         for hook in input forward; do
             echo "  chain $hook {"
             echo "    type filter hook $hook priority filter - 20; policy accept;"
+            echo "    iif lo accept"
+            echo "    ip saddr { 127.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } accept"
+            echo "    ip6 saddr { ::1, fc00::/7, fe80::/10 } accept"
             echo "    ip saddr @allow4 accept"
             echo "    ip6 saddr @allow6 accept"
             echo "    meta l4proto != tcp ip saddr @autoban4 ct state new counter name autoban_drops drop"
@@ -179,12 +185,17 @@ open_ports() {
 
 keep_bans() {
     nft -j list set inet "$TABLE" "$1" 2>/dev/null | python3 -c '
-import json, sys
+import ipaddress, json, sys
 for x in json.load(sys.stdin)["nftables"]:
     for e in x.get("set", {}).get("elem", []) or []:
         v = e["elem"]["val"] if isinstance(e, dict) and "elem" in e else e
         if isinstance(v, str):
-            print(v)' 2>/dev/null
+            try:
+                a = ipaddress.ip_address(v)
+            except ValueError:
+                continue
+            if a.is_global:
+                print(v)' 2>/dev/null
 }
 
 cmd_ports() {
