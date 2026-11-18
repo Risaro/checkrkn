@@ -22,6 +22,7 @@ SAFE = [
     ("dshield_top", "https://feeds.dshield.org/block.txt", "dshield"),
     ("et_block", "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt", "text"),
     ("feodo_c2", "https://feodotracker.abuse.ch/downloads/ipblocklist.txt", "text"),
+    ("checkrkn_honeypot", "https://raw.githubusercontent.com/Risaro/checkrkn/feed/lists/honeypot.txt", "text"),
     ("shadow_antiscanner", "https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/refs/heads/main/public/antiscanner.list", "text"),
 ]
 FULL_ONLY = [

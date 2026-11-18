@@ -29,7 +29,7 @@ checkrkn uninstall
 | [`lists/blocklist-safe.txt`](lists/blocklist-safe.txt) | только сканеры и инфраструктура злоумышленников |
 | [`lists/stats.json`](lists/stats.json) | сколько адресов дал каждый источник при последней сборке |
 
-Источники безопасного списка: сканеры РКН/ГРЧЦ, исследовательские сканеры SANS ISC (Shodan, Censys и др., активные за последние 30 дней), Spamhaus DROP, DShield, Emerging Threats, abuse.ch Feodo, antiscanner от shadow-netlab.
+Источники безопасного списка: адреса, пойманные ловушками checkrkn, сканеры РКН/ГРЧЦ, исследовательские сканеры SANS ISC (Shodan, Censys и др., активные за последние 30 дней), Spamhaus DROP, DShield, Emerging Threats, abuse.ch Feodo, antiscanner от shadow-netlab.
 
 Источники полного списка дополнительно: государственные сети, из которых идёт массовое сканирование (government_networks от shadow-netlab), ipsum, CINS Army, BinaryDefense. Учтите: пользователь, который подключается из такой госсети, к серверу с полным списком не подключится. Из них вырезаются все адреса России по реестру RIPE, потому что в таких списках много заражённых домашних устройств, а это могут быть ваши пользователи.
 
