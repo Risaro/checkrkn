@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-11-19T15:52:13+00:00",
+  "built_at": "2026-11-20T00:41:04+00:00",
   "sources": {
     "cloudflare_v4": {
       "role": "never_block",
@@ -18,7 +18,7 @@
     },
     "isc_research": {
       "role": "safe",
-      "count": 14609,
+      "count": 13129,
       "state": "fresh"
     },
     "spamhaus_drop_v4": {
@@ -38,7 +38,7 @@
     },
     "et_block": {
       "role": "safe",
-      "count": 1764,
+      "count": 1772,
       "state": "fresh"
     },
     "feodo_c2": {
@@ -48,7 +48,7 @@
     },
     "checkrkn_honeypot": {
       "role": "safe",
-      "count": 53152,
+      "count": 62041,
       "state": "fresh"
     },
     "shadow_antiscanner": {
@@ -66,7 +66,7 @@
       "countries": [
         "RU"
       ],
-      "count": 13683,
+      "count": 13684,
       "state": "fresh"
     },
     "ipsum_l3": {
@@ -77,18 +77,18 @@
     },
     "cins_badguys": {
       "role": "aggressive",
-      "count": 14934,
-      "dropped_spared": 66,
+      "count": 14932,
+      "dropped_spared": 68,
       "state": "fresh"
     },
     "binarydefense": {
       "role": "aggressive",
-      "count": 717,
-      "dropped_spared": 5,
+      "count": 318,
+      "dropped_spared": 2,
       "state": "fresh"
     }
   },
-  "total_v4": 73985,
-  "total_v6": 691,
-  "total_v4_addresses": 15415438
+  "total_v4": 82010,
+  "total_v6": 730,
+  "total_v4_addresses": 15423657
 }
