@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-11-27T08:44:36+00:00",
+  "built_at": "2026-11-27T21:25:38+00:00",
   "sources": {
     "cloudflare_v4": {
       "role": "never_block",
@@ -48,7 +48,7 @@
     },
     "checkrkn_honeypot": {
       "role": "safe",
-      "count": 200308,
+      "count": 208639,
       "state": "fresh"
     },
     "shadow_antiscanner": {
@@ -77,8 +77,8 @@
     },
     "cins_badguys": {
       "role": "aggressive",
-      "count": 14910,
-      "dropped_spared": 90,
+      "count": 14902,
+      "dropped_spared": 98,
       "state": "fresh"
     },
     "binarydefense": {
@@ -88,7 +88,7 @@
       "state": "fresh"
     }
   },
-  "total_v4": 202569,
-  "total_v6": 1610,
-  "total_v4_addresses": 15546594
+  "total_v4": 209973,
+  "total_v6": 1654,
+  "total_v4_addresses": 15555333
 }
